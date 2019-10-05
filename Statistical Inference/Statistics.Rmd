@@ -1,0 +1,123 @@
+---
+title: "Coursera Statistical Inference Project"
+author: "Erica Pehrsson"
+date: "6/28/2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Part 1
+## Overview
+This report demonstrates an example of the Central Limit Theorem, which states that regardless of the structure of the underlying population distribution, averages of samples taken from that distribution will converge on the population mean. The standard error of the mean (the standard deviation of the sample means) will be approximately the standard deviation divided by the square root of the sample size. This report demonstrates the concordance between a large number of random draws from the exponential distribution and the theoretical values described above. 
+
+```{r load libraries}
+library(plyr)
+library(ggplot2)
+```
+
+## Simulations
+The below code samples 40 random values from an exponential distribution with rate 0.2, repeated one thousand times. Then, it takes the mean of each sample of 40 values.
+
+```{r set variables}
+lambda=0.2
+N=40
+sim=1000
+set.seed(4)
+```
+
+```{r run simulation}
+simulations = ldply(seq(1,sim,1),function(x) rexp(N,lambda))
+simulations$Mean = apply(simulations,1,mean)
+```
+
+## Sample Mean versus Theoretical Mean
+
+```{r set means}
+# Sample mean
+mean.sample = mean(simulations$Mean)
+
+# Theoretical mean
+mean.theory = 1/lambda
+```
+
+Here, I show the distribution of the sample means of 40 draws from an exponential distribution with rate 0.2. The mean of the sample distribution (red) is `mean.sample`, roughly the mean of the underyling population (blue), `mean.theory`. 
+
+```{r plot means}
+ggplot(simulations,aes(x=Mean)) + geom_histogram() + geom_vline(xintercept=mean.sample, color="red") + geom_vline(xintercept=mean.theory, color="blue") + 
+  theme_classic() + ggtitle("Simulation vs. Theoretical Mean") + ylab("Simulations") + xlab("Simulation average")
+```
+
+## Sample Variance versus Theoretical Variance
+
+```{r set variances}
+# Sample variance
+variance.sample = sd(simulations$Mean)^2
+sd.sample = sqrt(variance.sample)
+
+# Theoretical variance
+variance.theory = (1/lambda)^2/N
+sd.theory = sqrt(variance.theory)
+```
+
+Similarly, the variance of the observed sample distribution (`variance.sample`) is similar to the theoretical predicted variance (`variance.theory`). The histogram below shows 1, 2, and 3 standard deviations from the sample distribution mean (red), compared to the standard deviations predicted by the formula for standard error of the mean (blue). 
+
+```{r plot variances}
+ggplot(simulations,aes(x=Mean)) + geom_histogram() + 
+  geom_vline(xintercept=mean.sample+sd.sample, color="red") + geom_vline(xintercept=mean.sample-sd.sample, color="red") + 
+  geom_vline(xintercept=mean.sample+2*sd.sample, color="red") + geom_vline(xintercept=mean.sample-2*sd.sample, color="red") + 
+  geom_vline(xintercept=mean.sample+3*sd.sample, color="red") + geom_vline(xintercept=mean.sample-3*sd.sample, color="red") + 
+  geom_vline(xintercept=mean.sample+sd.theory, color="blue") + geom_vline(xintercept=mean.sample-sd.theory, color="blue") + 
+  geom_vline(xintercept=mean.sample+2*sd.theory, color="blue") + geom_vline(xintercept=mean.sample-2*sd.theory, color="blue") + 
+  geom_vline(xintercept=mean.sample+3*sd.theory, color="blue") + geom_vline(xintercept=mean.sample-3*sd.theory, color="blue") + 
+  theme_classic() + ggtitle("Simulation vs. Theoretical Variance") + ylab("Simulations") + xlab("Simulation average")
+```
+
+## Distribution
+Finally, I compare the density of the sample distribution (black) to a normal population with mean identical to the underlying exponential distribution rate and standard deviation identical to the predicted standard error of the mean (red). There is high concordance between the two. The two distributions are very similar. This is in contrast to the exponential distribution (blue), which follows a much different pattern. 
+
+```{r plot distribution}
+ggplot(simulations,aes(x=Mean)) + geom_density() + 
+  stat_function(fun=dnorm,args=list(mean = mean.theory, sd = sd.theory),color="red") + 
+  stat_function(fun=dexp,args=list(rate = lambda),color="blue") + 
+  theme_classic() + ggtitle("Simulation vs. Normal Distribution") + ylab("Density") + xlab("Simulation average")
+```
+
+# ToothGrowth analysis
+
+## Load the ToothGrowth data and perform some basic exploratory data analyses
+The ToothGrowth dataset is described [here](http://stat.ethz.ch/R-manual/R-devel/library/datasets/html/ToothGrowth.html). 60 guinea pigs received vitamin C in either orange juice (OC) or ascorbic acid (VC) and one of three doses (0.5, 1, and 2 mg/day). 
+
+The ToothGrowth dataframe contains 3 columns, odontoblast length (len), supplement type (supp), and supplement dose (dose). Each combination of treatment and dose has 10 measurements. Tooth growth follows a roughly slightly right-skewed distribution. 
+
+```{r basic exploration}
+dim(ToothGrowth)
+head(ToothGrowth)
+summary(ToothGrowth)
+table(ToothGrowth$supp,ToothGrowth$dose)
+hist(ToothGrowth$len)
+```
+
+## Provide a basic summary of the data
+The mean and standard deviation of tooth growth for each combination of supplement type and dose are provided in the table below. They are also plotted as histograms. 
+
+```{r basic summary}
+ddply(ToothGrowth,.(supp,dose),summarise,Mean=mean(len),SD=sd(len))
+ggplot(ToothGrowth,aes(x=len)) + geom_density() + facet_grid(supp~dose)
+```
+
+## Use confidence intervals and/or hypothesis tests to compare tooth growth by supp and dose
+A hypothesis test comparing tooth growth by supplement type using a two-sample Student's t-test indicates that the difference between the two supplement groups is not significant at an alpha level of 0.05 (p-value 0.06). However, when the test is performed at each dose, both the 0.5 and 1 mg/day dose levels have p-values of < `0.05/3`, an alpha level of 0.05 adjusted for three comparisons using the Bonferroni correction. I also compared tooth length within supplement types between doses. At an alpha level of `0.05/6` (adjusted for six comparisons), the only comparison that is not significant is 1 vs. 2 mg/day for OJ. 
+
+```{r tests}
+t.test(len~supp,data=ToothGrowth)
+ddply(ToothGrowth,.(dose),summarise,Pvalue=t.test(len~supp)$p.value)
+ddply(ToothGrowth[which(ToothGrowth$dose %in% c(0.5,1)),],.(supp),summarise,Pvalue=t.test(len~dose)$p.value)
+ddply(ToothGrowth[which(ToothGrowth$dose %in% c(1,2)),],.(supp),summarise,Pvalue=t.test(len~dose)$p.value)
+ddply(ToothGrowth[which(ToothGrowth$dose %in% c(0.5,2)),],.(supp),summarise,Pvalue=t.test(len~dose)$p.value)
+```
+
+## State your conclusions and the assumptions needed for your conclusions
+Based on the above results, vitamin C provided via orange juice results in significantly greater tooth growth than vitamin C provided as ascorbic acid at 0.5 and 1 mg/day doses, but not 2 mg/day. For both supplement types, a higher dose of vitamin C almost always results in significantly greater tooth growth. These conclusions assume that all guinea pigs were treated equally. Furthermore, no control with only orange juice was performed; the study assumes that no additional vitamin C was provided by the vehicle. 
